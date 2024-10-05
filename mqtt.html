@@ -3,47 +3,142 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ESP32 MQTT Dashboard</title>
+  <title>MQTT Temperature Dashboard</title>
   <style>
-    body { font-family: Arial, sans-serif; margin: 20px; }
-    .dashboard { text-align: center; }
-    .status { font-size: 20px; margin-top: 20px; }
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+    }
+    .dashboard {
+      display: flex;
+      justify-content: space-around;
+    }
+    .chart-container, .gauge-container {
+      width: 45%;
+    }
+    .gauge-container {
+      text-align: center;
+    }
+    h1 {
+      text-align: center;
+    }
   </style>
 </head>
 <body>
+
+  <h1>MQTT Temperature Dashboard</h1>
+
   <div class="dashboard">
-    <h1>ESP32 MQTT Dashboard</h1>
-    <p>Current ESP32 data:</p>
-    <div class="status">
-      <strong>Temperature: </strong><span id="temperature">--</span>°C
-      <br>
-      <strong>Humidity: </strong><span id="humidity">--</span>%
+    <!-- Chart -->
+    <div class="chart-container">
+      <canvas id="tempChart"></canvas>
+    </div>
+
+    <!-- Gauge -->
+    <div class="gauge-container">
+      <canvas id="tempGauge"></canvas>
+      <h2 id="currentTemperature">-- °C</h2>
     </div>
   </div>
 
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
-  <script>
-    const broker = 'ws://broker.hivemq.com:8000/mqtt';  // Public HiveMQ Broker
-    const client = mqtt.connect(broker);
 
-    const topic = 'esp32/sensor';  // ESP32 will publish to this topic
+  <script>
+    // MQTT Setup
+    const brokerUrl = 'ws://broker.hivemq.com:8000/mqtt';
+    const client = mqtt.connect(brokerUrl);
+
+    const topic = 'esp32/temperature';  // Ganti dengan topik MQTT Anda
 
     client.on('connect', () => {
-      console.log('Connected to broker');
-      client.subscribe(topic, (err) => {
-        if (!err) {
-          console.log(`Subscribed to topic: ${topic}`);
-        } else {
-          console.error('Subscription error:', err);
-        }
-      });
+      console.log('Connected to MQTT broker');
+      client.subscribe(topic);
     });
 
+    let tempData = [];  // Data untuk chart
+    let chart;
+
+    // Setup Chart.js
+    function createChart() {
+      const ctx = document.getElementById('tempChart').getContext('2d');
+      chart = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: [],
+          datasets: [{
+            label: 'Temperature (°C)',
+            data: tempData,
+            borderColor: 'blue',
+            fill: false
+          }]
+        },
+        options: {
+          scales: {
+            x: {
+              type: 'time',
+              time: {
+                unit: 'minute'
+              }
+            },
+            y: {
+              beginAtZero: true,
+              suggestedMax: 40
+            }
+          }
+        }
+      });
+    }
+
+    // Setup Gauge
+    function createGauge() {
+      const ctx = document.getElementById('tempGauge').getContext('2d');
+      const gaugeChart = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+          labels: ['Temperature'],
+          datasets: [{
+            data: [0, 40],  // Current temperature, Max temperature
+            backgroundColor: ['#3cba9f', '#f4f4f4'],
+            borderWidth: 0
+          }]
+        },
+        options: {
+          circumference: Math.PI,
+          rotation: -Math.PI,
+          cutout: '75%',
+          responsive: false,
+          plugins: {
+            tooltip: { enabled: false },
+          }
+        }
+      });
+      return gaugeChart;
+    }
+
+    const tempGauge = createGauge();
+
+    // Handle Incoming MQTT Messages
     client.on('message', (topic, message) => {
-      const data = JSON.parse(message.toString());
-      document.getElementById('temperature').innerText = data.temperature;
-      document.getElementById('humidity').innerText = data.humidity;
+      const temp = parseFloat(message.toString());
+
+      // Update chart data
+      tempData.push({ x: new Date(), y: temp });
+      if (tempData.length > 30) tempData.shift();  // Keep last 30 points
+
+      chart.update();
+
+      // Update gauge and display current temperature
+      tempGauge.data.datasets[0].data[0] = temp;
+      tempGauge.update();
+
+      document.getElementById('currentTemperature').innerText = temp + " °C";
     });
+
+    // Initialize chart and gauge
+    createChart();
+
   </script>
+
 </body>
 </html>
