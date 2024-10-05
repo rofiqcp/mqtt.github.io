@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ESP32 MQTT Dashboard</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; }
+    .dashboard { text-align: center; }
+    .status { font-size: 20px; margin-top: 20px; }
+  </style>
+</head>
+<body>
+  <div class="dashboard">
+    <h1>ESP32 MQTT Dashboard</h1>
+    <p>Current ESP32 data:</p>
+    <div class="status">
+      <strong>Temperature: </strong><span id="temperature">--</span>°C
+      <br>
+      <strong>Humidity: </strong><span id="humidity">--</span>%
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+  <script>
+    const broker = 'ws://broker.hivemq.com:8000/mqtt';  // Public HiveMQ Broker
+    const client = mqtt.connect(broker);
+
+    const topic = 'esp32/sensor';  // ESP32 will publish to this topic
+
+    client.on('connect', () => {
+      console.log('Connected to broker');
+      client.subscribe(topic, (err) => {
+        if (!err) {
+          console.log(`Subscribed to topic: ${topic}`);
+        } else {
+          console.error('Subscription error:', err);
+        }
+      });
+    });
+
+    client.on('message', (topic, message) => {
+      const data = JSON.parse(message.toString());
+      document.getElementById('temperature').innerText = data.temperature;
+      document.getElementById('humidity').innerText = data.humidity;
+    });
+  </script>
+</body>
+</html>
